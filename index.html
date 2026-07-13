@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>トレーニング1700 v6</title>
+    <title>トレーニング1700 v7</title>
     <style>
         :root { --primary: #007bff; --success: #28a745; --danger: #dc3545; --gray: #6c757d; --bg: #f8f9fa; --clear: #adb5bd; --exit: #ffc107; }
         body { font-family: -apple-system, sans-serif; text-align: center; background-color: var(--bg); margin: 0; padding: 15px; color: #333; touch-action: manipulation; }
@@ -35,13 +35,13 @@
 
 <div class="container">
     <div id="setup-screen" class="screen active">
-        <h1>トレーニング1700 v6</h1>
+        <h1>トレーニング1700 v7</h1>
         <div class="setup-group">
             <label>出題範囲 (1～1700)</label>
-            <div style="display:flex; gap:10px;">
-                <input type="number" id="range-start" value="1" min="1" max="1700" style="width:100%; padding:15px; border-radius:8px; border:1px solid #ccc;">
-                <span style="align-self:center">～</span>
-                <input type="number" id="range-end" value="1700" min="1" max="1700" style="width:100%; padding:15px; border-radius:8px; border:1px solid #ccc;">
+            <div style="display:flex; gap:10px; align-items:center;">
+                <input type="number" id="range-start" value="1" min="1" max="1700" style="width:100%; padding:15px; border-radius:8px; border:1px solid #ccc; font-size: 1.5rem; font-weight: bold; text-align: center;">
+                <span style="font-size: 1.5rem; font-weight: bold;">～</span>
+                <input type="number" id="range-end" value="1700" min="1" max="1700" style="width:100%; padding:15px; border-radius:8px; border:1px solid #ccc; font-size: 1.5rem; font-weight: bold; text-align: center;">
             </div>
         </div>
         <div class="setup-group">
@@ -1303,7 +1303,7 @@
 "arrest|逮捕する",
 "reject|拒否する",
 "punish|罰する",
-"pretend|ふりとする",
+"pretend|ふりをする",
 "ship|輸送する",
 "stimulate|刺激する",
 "differ|異なる",
@@ -1845,12 +1845,10 @@
         document.getElementById('mistake-mode-info').style.display = 'none';
         
         showScreen('quiz-screen');
-        resizeCanvas(); // Ensure canvas is sized correctly when shown
         showQuestion();
     }
 
     function showQuestion() {
-        clearInput();
         const item = quizList[currentIndex].split('|');
         const display = (mode === 'en-jp') ? item[0] : item[1];
         document.getElementById('target-display').textContent = display;
@@ -1861,6 +1859,14 @@
         // Reset UI
         document.getElementById('ui-voice').style.display = (ansMethod === 'voice') ? 'block' : 'none';
         document.getElementById('ui-write').style.display = (ansMethod === 'write') ? 'block' : 'none';
+
+        // 表示状態になってからキャンバスサイズを再計算する（1問目から確実に書けるようにする）
+        if (ansMethod === 'write') {
+            resizeCanvas();
+        }
+        
+        clearInput();
+
         document.getElementById('correct-answer').style.display = 'none';
         document.getElementById('judge-btns').style.display = 'none';
         document.getElementById('show-answer-btn').style.display = 'block';
@@ -1946,6 +1952,7 @@
             minWidth: 2,
             maxWidth: 4,
         });
+        // 最初のロード時にも念のためリサイズ
         resizeCanvas();
     });
 
