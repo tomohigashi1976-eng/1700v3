@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>トレーニング1700 v9</title>
+    <title>トレーニング1700 v10</title>
     <style>
         :root { --primary: #007bff; --success: #28a745; --danger: #dc3545; --gray: #6c757d; --bg: #f8f9fa; --clear: #adb5bd; --exit: #ffc107; }
         body { font-family: -apple-system, sans-serif; text-align: center; background-color: var(--bg); margin: 0; padding: 15px; color: #333; touch-action: manipulation; }
@@ -35,7 +35,7 @@
 
 <div class="container">
     <div id="setup-screen" class="screen active">
-        <h1>トレーニング1700 v9</h1>
+        <h1>トレーニング1700 v10</h1>
         <div class="setup-group">
             <label>出題範囲 (1～1700)</label>
             <div style="display:flex; gap:10px; align-items:center;">
@@ -1861,9 +1861,7 @@
         document.getElementById('ui-voice').style.display = (ansMethod === 'voice') ? 'block' : 'none';
         document.getElementById('ui-write').style.display = (ansMethod === 'write') ? 'block' : 'none';
 
-        // 表示状態になってからキャンバスサイズを再計算する（1問目から確実に書けるようにする）
         if (ansMethod === 'write') {
-            // A short delay ensures the element is fully rendered before sizing
             setTimeout(() => resizeCanvas(), 0);
         }
         
@@ -1883,9 +1881,8 @@
         document.getElementById('show-answer-btn').style.display = 'none';
         document.getElementById('judge-btns').style.display = 'flex';
         
-        // 判定時はマイクを一旦停止
         if (recognition) {
-            try { recognition.stop(); } catch(e) {}
+            recognition.stop();
         }
     }
 
@@ -1900,8 +1897,7 @@
             showQuestion();
         } else {
             if (wrongAnswers.length > 0) {
-                // Start mistake round
-                quizList = [...new Set(wrongAnswers)]; // Remove duplicates
+                quizList = [...new Set(wrongAnswers)]; 
                 if (order === 'rand') {
                    quizList.sort(() => Math.random() - 0.5);
                 }
@@ -1919,43 +1915,35 @@
     }
 
     function clearInput() {
-        if (ansMethod === 'voice') {
-            const voiceOutput = document.getElementById('voice-output');
-            voiceOutput.textContent = "ここをタップしてマイクを起動";
-            voiceOutput.style.backgroundColor = "#e7f1ff"; // 背景色を戻す
-            if (recognition) {
-                try { recognition.stop(); } catch(e) {} // abort()からstop()へ変更
-            }
-        } else {
-            if (signaturePad) {
-                signaturePad.clear();
-            }
+        const voiceOutput = document.getElementById('voice-output');
+        voiceOutput.textContent = "ここをタップしてマイクを起動";
+        voiceOutput.style.backgroundColor = "#e7f1ff";
+        if (ansMethod === 'write' && signaturePad) {
+            signaturePad.clear();
         }
     }
 
-    // --- 音声入力の強化版 (iOS対応) ---
     function startVoice() {
         const voiceOutput = document.getElementById('voice-output');
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         
         if (!SpeechRecognition) {
-            voiceOutput.textContent = "お使いのブラウザは音声認識非対応です（SafariやChromeをお使いください）。";
+            voiceOutput.textContent = "お使いのブラウザは音声認識非対応です。";
             return;
         }
-        
-        // 既存のrecognitionインスタンスがあれば、安全に停止させる
-        if (recognition) {
-             try { recognition.stop(); } catch(e) { console.log("Old recognition instance could not be stopped."); }
-        }
 
+        if (recognition && (recognition.recognizing)) {
+            return; 
+        }
+        
         recognition = new SpeechRecognition();
         recognition.lang = (mode === 'en-jp') ? 'ja-JP' : 'en-US';
         recognition.interimResults = false;
-        recognition.maxAlternatives = 1;
 
         recognition.onstart = () => {
-            voiceOutput.textContent = "🎤 聞き取り中...（話してください）";
-            voiceOutput.style.backgroundColor = "#fff3cd"; // 黄色にして視覚的にアピール
+            recognition.recognizing = true;
+            voiceOutput.textContent = "🎤 聞き取り中...";
+            voiceOutput.style.backgroundColor = "#fff3cd";
         };
 
         recognition.onresult = (e) => {
@@ -1964,33 +1952,24 @@
 
         recognition.onerror = (e) => {
             console.error("Voice recognition error:", e.error);
-            voiceOutput.style.backgroundColor = "#f8d7da"; // エラー時は赤色
-            if (e.error === 'not-allowed') {
-                voiceOutput.textContent = "マイクがブロックされています。設定を確認してください。";
-            } else {
-                voiceOutput.textContent = "エラー: " + e.error + " （もう一度タップ）";
-            }
+            voiceOutput.style.backgroundColor = "#f8d7da";
+            voiceOutput.textContent = "エラー: " + e.error;
         };
 
         recognition.onend = () => {
-            // 正常終了、エラー終了問わず、背景色を元に戻す
+            recognition.recognizing = false;
             voiceOutput.style.backgroundColor = "#e7f1ff";
-             if (voiceOutput.textContent.includes("聞き取り中")) {
-                voiceOutput.textContent = "聞き取れませんでした（もう一度タップ）";
+            if (voiceOutput.textContent.includes("聞き取り中")) {
+                voiceOutput.textContent = "ここをタップしてマイクを起動";
             }
         };
 
-        try {
-            recognition.start();
-        } catch (e) {
-            console.error("Start error:", e);
-            voiceOutput.textContent = "マイクを起動できませんでした（もう一度タップ）";
-        }
+        recognition.start();
     }
     
     function exitQuiz() {
         if (recognition) {
-            try { recognition.stop(); } catch(e) {}
+            recognition.stop();
         }
         showScreen('setup-screen');
     }
@@ -2000,7 +1979,6 @@
         document.getElementById(id).classList.add('active');
     }
 
-    // --- Initialize on Load ---
     window.addEventListener('load', () => {
         signaturePad = new SignaturePad(canvas, {
             penColor: 'black',
