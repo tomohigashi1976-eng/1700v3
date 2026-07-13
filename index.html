@@ -18,10 +18,7 @@
         .target-word { font-size: 3.2rem; font-weight: 800; color: var(--primary); margin: 25px 0; }
         .input-area { margin: 20px 0; }
         .recognition-box { min-height: 100px; border: 2px dashed #ccc; border-radius: 12px; margin-bottom: 10px; padding: 15px; background: #fffcf0; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; color: #444; }
-        
-        /* canvas for handwriting */
         .handwriting-canvas { width: 100%; height: 300px; border: 3px solid var(--primary); border-radius: 15px; box-sizing: border-box; background: #fff; cursor: crosshair; touch-action: none; }
-
         .btn-clear { background: var(--clear); color: white; padding: 12px; border: none; border-radius: 10px; font-size: 1.1rem; font-weight: bold; cursor: pointer; width: 100%; margin-bottom: 15px; }
         .answer-display { font-size: 2.8rem; font-weight: bold; color: #d63384; margin: 20px 0; display: none; background: #fff0f6; padding: 20px; border-radius: 15px; border-left: 10px solid #d63384; }
         button.main-btn { width: 100%; padding: 22px; font-size: 1.5rem; border: none; border-radius: 15px; cursor: pointer; font-weight: bold; margin-top: 10px; }
@@ -1811,8 +1808,10 @@
     const canvas = document.getElementById('handwriting-canvas');
     const ctx = canvas.getContext('2d');
     let isDrawing = false;
-    
-    function setupCanvas() {
+    let lastX = 0;
+    let lastY = 0;
+
+    function initializeCanvas() {
         const dpr = window.devicePixelRatio || 1;
         const rect = canvas.getBoundingClientRect();
         canvas.width = rect.width * dpr;
@@ -1820,60 +1819,47 @@
         ctx.scale(dpr, dpr);
         
         ctx.strokeStyle = '#000';
-        ctx.lineWidth = 5;
+        ctx.lineWidth = 4; // Slightly thinner for better look on high-dpi
         ctx.lineJoin = 'round';
         ctx.lineCap = 'round';
-
-        canvas.addEventListener('mousedown', startDrawing);
-        canvas.addEventListener('mousemove', draw);
-        canvas.addEventListener('mouseup', stopDrawing);
-        canvas.addEventListener('mouseout', stopDrawing);
-        
-        canvas.addEventListener('touchstart', startDrawing, { passive: false });
-        canvas.addEventListener('touchmove', draw, { passive: false });
-        canvas.addEventListener('touchend', stopDrawing);
     }
 
-    function getPos(e) {
+    function getCoordinates(e) {
         const rect = canvas.getBoundingClientRect();
+        let event = e;
         if (e.touches && e.touches[0]) {
-             return {
-                x: e.touches[0].clientX - rect.left,
-                y: e.touches[0].clientY - rect.top
-            };
+            event = e.touches[0];
         }
         return {
-            x: e.clientX - rect.left,
-            y: e.clientY - rect.top
+            x: event.clientX - rect.left,
+            y: event.clientY - rect.top
         };
     }
 
     function startDrawing(e) {
         e.preventDefault();
         isDrawing = true;
-        const pos = getPos(e);
+        const { x, y } = getCoordinates(e);
+        [lastX, lastY] = [x, y];
         ctx.beginPath();
-        ctx.moveTo(pos.x, pos.y);
+        ctx.moveTo(lastX, lastY);
     }
 
     function draw(e) {
         if (!isDrawing) return;
         e.preventDefault();
-        const pos = getPos(e);
-        ctx.lineTo(pos.x, pos.y);
+        const { x, y } = getCoordinates(e);
+        ctx.lineTo(x, y);
         ctx.stroke();
+        [lastX, lastY] = [x, y];
     }
 
     function stopDrawing(e) {
-        e.preventDefault();
         if (!isDrawing) return;
+        e.preventDefault();
         isDrawing = false;
-        ctx.closePath();
     }
     
-    window.addEventListener('load', setupCanvas);
-    window.addEventListener('resize', setupCanvas);
-
     // --- Setup Functions ---
     function setMode(m) { mode = m; updateOptBtns('m', m); }
     function setOrder(o) { order = o; updateOptBtns('o', o); }
@@ -1964,7 +1950,9 @@
         if (ansMethod === 'voice') {
             document.getElementById('voice-output').textContent = "マイクを許可して発音してください";
         } else {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            ctx.clearRect(0, 0, rect.width * dpr, rect.height * dpr);
         }
     }
 
@@ -1989,6 +1977,22 @@
         document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
         document.getElementById(id).classList.add('active');
     }
+
+    // --- Initialize on Load ---
+    window.addEventListener('load', () => {
+        initializeCanvas();
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseleave', stopDrawing); // To stop drawing if mouse leaves canvas
+        
+        canvas.addEventListener('touchstart', startDrawing, { passive: false });
+        canvas.addEventListener('touchmove', draw, { passive: false });
+        canvas.addEventListener('touchend', stopDrawing);
+    });
+
+    window.addEventListener('resize', initializeCanvas);
+
 </script>
 </body>
 </html>
