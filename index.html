@@ -1812,33 +1812,44 @@
     const ctx = canvas.getContext('2d');
     let isDrawing = false;
     
-    function resizeCanvas() {
+    function setupCanvas() {
+        const dpr = window.devicePixelRatio || 1;
         const rect = canvas.getBoundingClientRect();
-        canvas.width = rect.width;
-        canvas.height = rect.height;
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        ctx.scale(dpr, dpr);
+        
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 5;
+        ctx.lineJoin = 'round';
         ctx.lineCap = 'round';
+
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseout', stopDrawing);
+        
+        canvas.addEventListener('touchstart', startDrawing, { passive: false });
+        canvas.addEventListener('touchmove', draw, { passive: false });
+        canvas.addEventListener('touchend', stopDrawing);
     }
 
     function getPos(e) {
         const rect = canvas.getBoundingClientRect();
-        const scaleX = canvas.width / rect.width;
-        const scaleY = canvas.height / rect.height;
-        
         if (e.touches && e.touches[0]) {
              return {
-                x: (e.touches[0].clientX - rect.left) * scaleX,
-                y: (e.touches[0].clientY - rect.top) * scaleY
+                x: e.touches[0].clientX - rect.left,
+                y: e.touches[0].clientY - rect.top
             };
         }
         return {
-            x: (e.clientX - rect.left) * scaleX,
-            y: (e.clientY - rect.top) * scaleY
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top
         };
     }
 
     function startDrawing(e) {
+        e.preventDefault();
         isDrawing = true;
         const pos = getPos(e);
         ctx.beginPath();
@@ -1853,21 +1864,15 @@
         ctx.stroke();
     }
 
-    function stopDrawing() {
+    function stopDrawing(e) {
+        e.preventDefault();
+        if (!isDrawing) return;
         isDrawing = false;
         ctx.closePath();
     }
     
-    window.addEventListener('load', resizeCanvas);
-    window.addEventListener('resize', resizeCanvas);
-    canvas.addEventListener('mousedown', startDrawing);
-    canvas.addEventListener('mousemove', draw);
-    canvas.addEventListener('mouseup', stopDrawing);
-    canvas.addEventListener('mouseout', stopDrawing);
-    canvas.addEventListener('touchstart', startDrawing);
-    canvas.addEventListener('touchmove', draw);
-    canvas.addEventListener('touchend', stopDrawing);
-
+    window.addEventListener('load', setupCanvas);
+    window.addEventListener('resize', setupCanvas);
 
     // --- Setup Functions ---
     function setMode(m) { mode = m; updateOptBtns('m', m); }
@@ -1946,6 +1951,7 @@
                 currentIndex = 0;
                 isMistakeMode = true;
                 document.getElementById('mistake-mode-info').style.display = 'block';
+                alert('間違えた問題の復習を開始します。');
                 showQuestion();
             } else {
                 alert("全問正解！トレーニング終了です！");
