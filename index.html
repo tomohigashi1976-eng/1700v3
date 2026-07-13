@@ -1,19 +1,11 @@
-import re
-
-# The user wants to modify the CSS for the handwriting input to make it larger.
-# The original code is provided in the `tests/testdata/user_uploads/テストcode.txt` file.
-# I will read the content of this file, modify the CSS, and then save the new content to a file.
-
-# Since I am in a new turn, I need to access the file content.
-# The user's request includes the file content again.
-file_content = """<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>トレーニング1700</title>
     <style>
-        :root { --primary: #007bff; --success: #28a745; --danger: #dc3545; --gray: #6c757d; --bg: #f8f9fa; --clear: #adb5bd; }
+        :root { --primary: #007bff; --success: #28a745; --danger: #dc3545; --gray: #6c757d; --bg: #f8f9fa; --clear: #adb5bd; --exit: #ffc107; }
         body { font-family: -apple-system, sans-serif; text-align: center; background-color: var(--bg); margin: 0; padding: 15px; color: #333; touch-action: manipulation; }
         .container { max-width: 600px; margin: auto; background: white; padding: 25px; border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
         .screen { display: none; }
@@ -26,8 +18,10 @@ file_content = """<!DOCTYPE html>
         .target-word { font-size: 3.2rem; font-weight: 800; color: var(--primary); margin: 25px 0; }
         .input-area { margin: 20px 0; }
         .recognition-box { min-height: 100px; border: 2px dashed #ccc; border-radius: 12px; margin-bottom: 10px; padding: 15px; background: #fffcf0; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; color: #444; }
-        /* 手書き入力欄を大きく設定 */
-        .handwriting-input { width: 100%; height: 300px; padding: 15px; font-size: 2rem; border: 3px solid var(--primary); border-radius: 15px; text-align: center; box-sizing: border-box; background: #fff; }
+        
+        /* canvas for handwriting */
+        .handwriting-canvas { width: 100%; height: 300px; border: 3px solid var(--primary); border-radius: 15px; box-sizing: border-box; background: #fff; cursor: crosshair; touch-action: none; }
+
         .btn-clear { background: var(--clear); color: white; padding: 12px; border: none; border-radius: 10px; font-size: 1.1rem; font-weight: bold; cursor: pointer; width: 100%; margin-bottom: 15px; }
         .answer-display { font-size: 2.8rem; font-weight: bold; color: #d63384; margin: 20px 0; display: none; background: #fff0f6; padding: 20px; border-radius: 15px; border-left: 10px solid #d63384; }
         button.main-btn { width: 100%; padding: 22px; font-size: 1.5rem; border: none; border-radius: 15px; cursor: pointer; font-weight: bold; margin-top: 10px; }
@@ -36,6 +30,8 @@ file_content = """<!DOCTYPE html>
         .btn-correct { background: var(--success); color: white; width: 48%; height: 100px; font-size: 1.8rem; }
         .btn-wrong { background: var(--danger); color: white; width: 48%; height: 100px; font-size: 1.8rem; }
         .btn-group { display: flex; justify-content: space-between; display: none; gap: 10px; }
+        .quiz-header { display: flex; justify-content: space-between; align-items: center; }
+        .btn-exit { background: var(--exit); color: black; padding: 8px 16px; border: none; border-radius: 10px; font-size: 1rem; font-weight: bold; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -73,16 +69,19 @@ file_content = """<!DOCTYPE html>
     </div>
 
     <div id="quiz-screen" class="screen">
-        <div id="progress-text" style="font-weight:bold; color:var(--gray);"></div>
+        <div class="quiz-header">
+            <div id="progress-text" style="font-weight:bold; color:var(--gray);"></div>
+            <button class="btn-exit" onclick="exitQuiz()">終了する</button>
+        </div>
+        <div id="mistake-mode-info" style="font-weight:bold; color:var(--danger); margin-top:10px; display:none;">間違えた問題だけ出題中！</div>
         <div class="target-word" id="target-display">---</div>
         
         <div id="ui-voice" class="input-area" style="display:none;">
             <div class="recognition-box" id="voice-output">マイクを許可して発音してください</div>
-            <button class="btn-clear" onclick="clearInput()">クリア</button>
         </div>
 
         <div id="ui-write" class="input-area" style="display:none;">
-            <textarea class="handwriting-input" id="text-answer" placeholder="ここに回答"></textarea>
+            <canvas class="handwriting-canvas" id="handwriting-canvas"></canvas>
             <button class="btn-clear" onclick="clearInput()" style="margin-top:10px;">書き直し</button>
         </div>
 
@@ -1800,13 +1799,77 @@ file_content = """<!DOCTYPE html>
 "wear out (～)|〜を使い古す、〜を疲れ果てさせる"
     ];
 
-// 状態管理用変数
+    // --- State Management ---
     let mode = 'en-jp', order = 'asc', ansMethod = 'voice';
     let currentIndex = 0;
     let quizList = [];
+    let wrongAnswers = [];
+    let isMistakeMode = false;
     let recognition;
 
-    // 設定変更用関数
+    // --- Handwriting Canvas ---
+    const canvas = document.getElementById('handwriting-canvas');
+    const ctx = canvas.getContext('2d');
+    let isDrawing = false;
+    
+    function resizeCanvas() {
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width;
+        canvas.height = rect.height;
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 5;
+        ctx.lineCap = 'round';
+    }
+
+    function getPos(e) {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        
+        if (e.touches && e.touches[0]) {
+             return {
+                x: (e.touches[0].clientX - rect.left) * scaleX,
+                y: (e.touches[0].clientY - rect.top) * scaleY
+            };
+        }
+        return {
+            x: (e.clientX - rect.left) * scaleX,
+            y: (e.clientY - rect.top) * scaleY
+        };
+    }
+
+    function startDrawing(e) {
+        isDrawing = true;
+        const pos = getPos(e);
+        ctx.beginPath();
+        ctx.moveTo(pos.x, pos.y);
+    }
+
+    function draw(e) {
+        if (!isDrawing) return;
+        e.preventDefault();
+        const pos = getPos(e);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+    }
+
+    function stopDrawing() {
+        isDrawing = false;
+        ctx.closePath();
+    }
+    
+    window.addEventListener('load', resizeCanvas);
+    window.addEventListener('resize', resizeCanvas);
+    canvas.addEventListener('mousedown', startDrawing);
+    canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('mouseup', stopDrawing);
+    canvas.addEventListener('mouseout', stopDrawing);
+    canvas.addEventListener('touchstart', startDrawing);
+    canvas.addEventListener('touchmove', draw);
+    canvas.addEventListener('touchend', stopDrawing);
+
+
+    // --- Setup Functions ---
     function setMode(m) { mode = m; updateOptBtns('m', m); }
     function setOrder(o) { order = o; updateOptBtns('o', o); }
     function setAnsMethod(a) { ansMethod = a; updateOptBtns('a', a); }
@@ -1815,7 +1878,7 @@ file_content = """<!DOCTYPE html>
         document.getElementById(`${prefix}-${val}`).classList.add('selected');
     }
 
-    // トレーニング開始
+    // --- Quiz Logic ---
     function startLesson() {
         const start = parseInt(document.getElementById('range-start').value) - 1;
         const end = parseInt(document.getElementById('range-end').value);
@@ -1826,18 +1889,24 @@ file_content = """<!DOCTYPE html>
         }
         
         currentIndex = 0;
+        wrongAnswers = [];
+        isMistakeMode = false;
+        document.getElementById('mistake-mode-info').style.display = 'none';
+        
         showScreen('quiz-screen');
         showQuestion();
     }
 
-    // 出題表示
     function showQuestion() {
+        clearInput();
         const item = quizList[currentIndex].split('|');
         const display = (mode === 'en-jp') ? item[0] : item[1];
         document.getElementById('target-display').textContent = display;
-        document.getElementById('progress-text').textContent = `${currentIndex + 1} / ${quizList.length}`;
         
-        // UI初期化
+        const progressPrefix = isMistakeMode ? "【復習】" : "";
+        document.getElementById('progress-text').textContent = `${progressPrefix}${currentIndex + 1} / ${quizList.length}`;
+        
+        // Reset UI
         document.getElementById('ui-voice').style.display = (ansMethod === 'voice') ? 'block' : 'none';
         document.getElementById('ui-write').style.display = (ansMethod === 'write') ? 'block' : 'none';
         document.getElementById('correct-answer').style.display = 'none';
@@ -1847,18 +1916,6 @@ file_content = """<!DOCTYPE html>
         if (ansMethod === 'voice') startVoice();
     }
 
-    // 音声入力開始
-    function startVoice() {
-        if (!('webkitSpeechRecognition' in window)) return;
-        recognition = new webkitSpeechRecognition();
-        recognition.lang = (mode === 'en-jp') ? 'ja-JP' : 'en-US';
-        recognition.onresult = (e) => {
-            document.getElementById('voice-output').textContent = e.results[0][0].transcript;
-        };
-        recognition.start();
-    }
-
-    // 回答表示
     function revealAnswer() {
         const item = quizList[currentIndex].split('|');
         const ans = (mode === 'en-jp') ? item[1] : item[0];
@@ -1869,21 +1926,57 @@ file_content = """<!DOCTYPE html>
         document.getElementById('judge-btns').style.display = 'flex';
     }
 
-    // 判定処理
     function processJudge(isCorrect) {
-        // 必要に応じてここで正解数を記録するなどの処理を追加可能
+        if (!isCorrect) {
+            wrongAnswers.push(quizList[currentIndex]);
+        }
+        
         currentIndex++;
+        
         if (currentIndex < quizList.length) {
             showQuestion();
         } else {
-            alert("トレーニング終了です！");
-            location.reload();
+            if (wrongAnswers.length > 0) {
+                // Start mistake round
+                quizList = [...new Set(wrongAnswers)]; // Remove duplicates
+                if (order === 'rand') {
+                   quizList.sort(() => Math.random() - 0.5);
+                }
+                wrongAnswers = [];
+                currentIndex = 0;
+                isMistakeMode = true;
+                document.getElementById('mistake-mode-info').style.display = 'block';
+                showQuestion();
+            } else {
+                alert("全問正解！トレーニング終了です！");
+                exitQuiz();
+            }
         }
     }
 
     function clearInput() {
-        document.getElementById('voice-output').textContent = "マイクを許可して発音してください";
-        document.getElementById('text-answer').value = "";
+        if (ansMethod === 'voice') {
+            document.getElementById('voice-output').textContent = "マイクを許可して発音してください";
+        } else {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+    }
+
+    function startVoice() {
+        if (!('webkitSpeechRecognition' in window)) {
+            document.getElementById('voice-output').textContent = "お使いのブラウザは音声認識に対応していません。";
+            return;
+        }
+        recognition = new webkitSpeechRecognition();
+        recognition.lang = (mode === 'en-jp') ? 'ja-JP' : 'en-US';
+        recognition.onresult = (e) => {
+            document.getElementById('voice-output').textContent = e.results[0][0].transcript;
+        };
+        recognition.start();
+    }
+    
+    function exitQuiz() {
+        showScreen('setup-screen');
     }
 
     function showScreen(id) {
@@ -1892,31 +1985,4 @@ file_content = """<!DOCTYPE html>
     }
 </script>
 </body>
-</html>"""
-
-# The modification is to increase the height of the handwriting input area.
-# The original CSS is:
-# .handwriting-input { width: 100%; height: 300px; padding: 15px; font-size: 2rem; border: 3px solid var(--primary); border-radius: 15px; text-align: center; box-sizing: border-box; background: #fff; }
-# I will change `height: 300px` to `height: 400px`.
-# And increase the font-size to 2.5rem for better visibility on tablets.
-modified_css_rule = ".handwriting-input { width: 100%; height: 400px; padding: 15px; font-size: 2.5rem; border: 3px solid var(--primary); border-radius: 15px; text-align: center; box-sizing: border-box; background: #fff; }"
-
-# Use regex to find and replace the CSS rule for .handwriting-input
-# The pattern needs to be carefully crafted to avoid being too greedy.
-# It will match from `.handwriting-input {` to the next `}`
-pattern = re.compile(r"(\.handwriting-input\s*\{[^}]*\})")
-modified_content = pattern.sub(modified_css_rule, file_content, count=1)
-
-# Check if the substitution was successful
-if modified_content == file_content:
-    # If regex fails, fall back to simple string replacement, which is less robust but might work.
-    original_rule = ".handwriting-input { width: 100%; height: 300px; padding: 15px; font-size: 2rem; border: 3px solid var(--primary); border-radius: 15px; text-align: center; box-sizing: border-box; background: #fff; }"
-    modified_content = file_content.replace(original_rule, modified_css_rule)
-
-
-# Save the modified content to a new file.
-output_filename = "modified_code.txt"
-with open(output_filename, "w", encoding="utf-8") as f:
-    f.write(modified_content)
-
-print(f"The modified code has been saved to '{output_filename}'.")
+</html>
