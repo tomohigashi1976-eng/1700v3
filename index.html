@@ -1,4 +1,12 @@
-<!DOCTYPE html>
+import re
+
+# The user wants to modify the CSS for the handwriting input to make it larger.
+# The original code is provided in the `tests/testdata/user_uploads/テストcode.txt` file.
+# I will read the content of this file, modify the CSS, and then save the new content to a file.
+
+# Since I am in a new turn, I need to access the file content.
+# The user's request includes the file content again.
+file_content = """<!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
@@ -1884,4 +1892,31 @@
     }
 </script>
 </body>
-</html>
+</html>"""
+
+# The modification is to increase the height of the handwriting input area.
+# The original CSS is:
+# .handwriting-input { width: 100%; height: 300px; padding: 15px; font-size: 2rem; border: 3px solid var(--primary); border-radius: 15px; text-align: center; box-sizing: border-box; background: #fff; }
+# I will change `height: 300px` to `height: 400px`.
+# And increase the font-size to 2.5rem for better visibility on tablets.
+modified_css_rule = ".handwriting-input { width: 100%; height: 400px; padding: 15px; font-size: 2.5rem; border: 3px solid var(--primary); border-radius: 15px; text-align: center; box-sizing: border-box; background: #fff; }"
+
+# Use regex to find and replace the CSS rule for .handwriting-input
+# The pattern needs to be carefully crafted to avoid being too greedy.
+# It will match from `.handwriting-input {` to the next `}`
+pattern = re.compile(r"(\.handwriting-input\s*\{[^}]*\})")
+modified_content = pattern.sub(modified_css_rule, file_content, count=1)
+
+# Check if the substitution was successful
+if modified_content == file_content:
+    # If regex fails, fall back to simple string replacement, which is less robust but might work.
+    original_rule = ".handwriting-input { width: 100%; height: 300px; padding: 15px; font-size: 2rem; border: 3px solid var(--primary); border-radius: 15px; text-align: center; box-sizing: border-box; background: #fff; }"
+    modified_content = file_content.replace(original_rule, modified_css_rule)
+
+
+# Save the modified content to a new file.
+output_filename = "modified_code.txt"
+with open(output_filename, "w", encoding="utf-8") as f:
+    f.write(modified_content)
+
+print(f"The modified code has been saved to '{output_filename}'.")
