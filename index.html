@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>トレーニング1700</title>
+    <title>トレーニング1700 v6</title>
     <style>
         :root { --primary: #007bff; --success: #28a745; --danger: #dc3545; --gray: #6c757d; --bg: #f8f9fa; --clear: #adb5bd; --exit: #ffc107; }
         body { font-family: -apple-system, sans-serif; text-align: center; background-color: var(--bg); margin: 0; padding: 15px; color: #333; touch-action: manipulation; }
@@ -35,7 +35,7 @@
 
 <div class="container">
     <div id="setup-screen" class="screen active">
-        <h1>トレーニング1700</h1>
+        <h1>トレーニング1700 v6</h1>
         <div class="setup-group">
             <label>出題範囲 (1～1700)</label>
             <div style="display:flex; gap:10px;">
@@ -90,6 +90,8 @@
         </div>
     </div>
 </div>
+
+<script src="https://unpkg.com/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
 
 <script>
     // 【データ貼り付けエリア】
@@ -1301,7 +1303,7 @@
 "arrest|逮捕する",
 "reject|拒否する",
 "punish|罰する",
-"pretend|ふりをする",
+"pretend|ふりとする",
 "ship|輸送する",
 "stimulate|刺激する",
 "differ|異なる",
@@ -1803,63 +1805,21 @@
     let wrongAnswers = [];
     let isMistakeMode = false;
     let recognition;
+    let signaturePad;
 
-    // --- Handwriting Canvas ---
+    // --- Handwriting Canvas Setup ---
     const canvas = document.getElementById('handwriting-canvas');
-    const ctx = canvas.getContext('2d');
-    let isDrawing = false;
-    let lastX = 0;
-    let lastY = 0;
-
-    function initializeCanvas() {
-        const dpr = window.devicePixelRatio || 1;
-        const rect = canvas.getBoundingClientRect();
-        canvas.width = rect.width * dpr;
-        canvas.height = rect.height * dpr;
-        ctx.scale(dpr, dpr);
-        
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 4; // Slightly thinner for better look on high-dpi
-        ctx.lineJoin = 'round';
-        ctx.lineCap = 'round';
-    }
-
-    function getCoordinates(e) {
-        const rect = canvas.getBoundingClientRect();
-        let event = e;
-        if (e.touches && e.touches[0]) {
-            event = e.touches[0];
-        }
-        return {
-            x: event.clientX - rect.left,
-            y: event.clientY - rect.top
-        };
-    }
-
-    function startDrawing(e) {
-        e.preventDefault();
-        isDrawing = true;
-        const { x, y } = getCoordinates(e);
-        [lastX, lastY] = [x, y];
-        ctx.beginPath();
-        ctx.moveTo(lastX, lastY);
-    }
-
-    function draw(e) {
-        if (!isDrawing) return;
-        e.preventDefault();
-        const { x, y } = getCoordinates(e);
-        ctx.lineTo(x, y);
-        ctx.stroke();
-        [lastX, lastY] = [x, y];
-    }
-
-    function stopDrawing(e) {
-        if (!isDrawing) return;
-        e.preventDefault();
-        isDrawing = false;
-    }
     
+    function resizeCanvas() {
+        const ratio =  Math.max(window.devicePixelRatio || 1, 1);
+        canvas.width = canvas.offsetWidth * ratio;
+        canvas.height = canvas.offsetHeight * ratio;
+        canvas.getContext("2d").scale(ratio, ratio);
+        if (signaturePad) {
+            signaturePad.clear(); // Clear history and redraw current data
+        }
+    }
+
     // --- Setup Functions ---
     function setMode(m) { mode = m; updateOptBtns('m', m); }
     function setOrder(o) { order = o; updateOptBtns('o', o); }
@@ -1885,6 +1845,7 @@
         document.getElementById('mistake-mode-info').style.display = 'none';
         
         showScreen('quiz-screen');
+        resizeCanvas(); // Ensure canvas is sized correctly when shown
         showQuestion();
     }
 
@@ -1950,9 +1911,9 @@
         if (ansMethod === 'voice') {
             document.getElementById('voice-output').textContent = "マイクを許可して発音してください";
         } else {
-            const dpr = window.devicePixelRatio || 1;
-            const rect = canvas.getBoundingClientRect();
-            ctx.clearRect(0, 0, rect.width * dpr, rect.height * dpr);
+            if (signaturePad) {
+                signaturePad.clear();
+            }
         }
     }
 
@@ -1980,18 +1941,15 @@
 
     // --- Initialize on Load ---
     window.addEventListener('load', () => {
-        initializeCanvas();
-        canvas.addEventListener('mousedown', startDrawing);
-        canvas.addEventListener('mousemove', draw);
-        canvas.addEventListener('mouseup', stopDrawing);
-        canvas.addEventListener('mouseleave', stopDrawing); // To stop drawing if mouse leaves canvas
-        
-        canvas.addEventListener('touchstart', startDrawing, { passive: false });
-        canvas.addEventListener('touchmove', draw, { passive: false });
-        canvas.addEventListener('touchend', stopDrawing);
+        signaturePad = new SignaturePad(canvas, {
+            penColor: 'black',
+            minWidth: 2,
+            maxWidth: 4,
+        });
+        resizeCanvas();
     });
 
-    window.addEventListener('resize', initializeCanvas);
+    window.addEventListener('resize', resizeCanvas);
 
 </script>
 </body>
